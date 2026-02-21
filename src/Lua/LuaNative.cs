@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace CESDK.Lua
@@ -9,8 +10,6 @@ namespace CESDK.Lua
     /// </summary>
     public sealed class LuaNative
     {
-
-
         #region Constants
         // Basic types: https://www.lua.org/source/5.3/lua.h.html
 
@@ -34,7 +33,11 @@ namespace CESDK.Lua
         private delegate IntPtr GetLuaStateDelegate();
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate IntPtr LuaRegisterDelegate(IntPtr luaState, [MarshalAs(UnmanagedType.LPStr)] string functionName, LuaCFunction function);
+        private delegate IntPtr LuaRegisterDelegate(
+            IntPtr luaState,
+            [MarshalAs(UnmanagedType.LPStr)] string functionName,
+            LuaCFunction function
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate void LuaPushClassInstanceDelegate(IntPtr luaState, IntPtr instance);
@@ -46,13 +49,22 @@ namespace CESDK.Lua
         private delegate void DelegateSetTop(IntPtr state, int index);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate int DelegateGetGlobal(IntPtr state, [MarshalAs(UnmanagedType.LPStr)] string name);
+        private delegate int DelegateGetGlobal(
+            IntPtr state,
+            [MarshalAs(UnmanagedType.LPStr)] string name
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void DelegateSetGlobal(IntPtr state, [MarshalAs(UnmanagedType.LPStr)] string name);
+        private delegate void DelegateSetGlobal(
+            IntPtr state,
+            [MarshalAs(UnmanagedType.LPStr)] string name
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void DelegatePushString(IntPtr state, [MarshalAs(UnmanagedType.LPStr)] string str);
+        private delegate void DelegatePushString(
+            IntPtr state,
+            [MarshalAs(UnmanagedType.LPStr)] string str
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void DelegatePushInteger(IntPtr state, long value);
@@ -64,10 +76,18 @@ namespace CESDK.Lua
         private delegate void DelegatePushBoolean(IntPtr state, bool value);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate int DelegateGetField(IntPtr state, int index, [MarshalAs(UnmanagedType.LPStr)] string key);
+        private delegate int DelegateGetField(
+            IntPtr state,
+            int index,
+            [MarshalAs(UnmanagedType.LPStr)] string key
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void DelegateSetField(IntPtr state, int index, [MarshalAs(UnmanagedType.LPStr)] string key);
+        private delegate void DelegateSetField(
+            IntPtr state,
+            int index,
+            [MarshalAs(UnmanagedType.LPStr)] string key
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void DelegateCreateTable(IntPtr state, int arraySize, int recordSize);
@@ -94,10 +114,20 @@ namespace CESDK.Lua
         private delegate bool DelegateToBoolean(IntPtr state, int index);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate int DelegatePCall(IntPtr state, int nargs, int nresults, int errfunc);
+        private delegate int DelegatePCall(
+            IntPtr state,
+            int nargs,
+            int nresults,
+            int errfunc,
+            IntPtr ctx,
+            IntPtr k
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate int DelegateLoadString(IntPtr state, [MarshalAs(UnmanagedType.LPStr)] string script);
+        private delegate int DelegateLoadString(
+            IntPtr state,
+            [MarshalAs(UnmanagedType.LPStr)] string script
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate int DelegateGetTable(IntPtr state, int index);
@@ -126,8 +156,6 @@ namespace CESDK.Lua
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate bool DelegateIsCFunction(IntPtr state, int index);
 
-
-
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate bool DelegateIsUserData(IntPtr state, int index);
 
@@ -135,7 +163,13 @@ namespace CESDK.Lua
         private delegate int DelegateRawLen(IntPtr state, int index);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void DelegateCall(IntPtr state, int nargs, int nresults, IntPtr ctx, IntPtr k);
+        private delegate void DelegateCall(
+            IntPtr state,
+            int nargs,
+            int nresults,
+            IntPtr ctx,
+            IntPtr k
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate IntPtr DelegateToUserData(IntPtr state, int index);
@@ -197,15 +231,21 @@ namespace CESDK.Lua
 
         #endregion
 
-        private LuaNative(IntPtr getLuaStatePtr, IntPtr luaRegisterPtr, IntPtr luaPushClassInstancePtr)
+        private LuaNative(
+            IntPtr getLuaStatePtr,
+            IntPtr luaRegisterPtr,
+            IntPtr luaPushClassInstancePtr
+        )
         {
             // Load Lua library exactly like the legacy CESDKLua
-            IntPtr luaModule = LoadLibraryA("lua53-32.dll");
+            IntPtr luaModule = LoadLuaLibrary("lua53-32.dll");
             if (luaModule == IntPtr.Zero)
-                luaModule = LoadLibraryA("lua53-64.dll");
+                luaModule = LoadLuaLibrary("lua53-64.dll");
 
             if (luaModule == IntPtr.Zero)
-                throw new InvalidOperationException("Could not load Lua library - tried lua53-32.dll and lua53-64.dll");
+                throw new InvalidOperationException(
+                    "Could not load Lua library - tried lua53-32.dll and lua53-64.dll"
+                );
 
             // Initialize function pointers
             _getTop = GetDelegate<DelegateGetTop>(luaModule, "lua_gettop");
@@ -244,16 +284,78 @@ namespace CESDK.Lua
             _pushCFunction = GetDelegate<DelegatePushCFunction>(luaModule, "lua_pushcclosure");
 
             // Store CE-specific delegates so we can call them dynamically
-            _getLuaState = Marshal.GetDelegateForFunctionPointer<GetLuaStateDelegate>(getLuaStatePtr);
-            _luaRegister = Marshal.GetDelegateForFunctionPointer<LuaRegisterDelegate>(luaRegisterPtr);
-            _luaPushClassInstance = Marshal.GetDelegateForFunctionPointer<DelegateLuaPushClassInstance>(luaPushClassInstancePtr);
+            _getLuaState = Marshal.GetDelegateForFunctionPointer<GetLuaStateDelegate>(
+                getLuaStatePtr
+            );
+            _luaRegister = Marshal.GetDelegateForFunctionPointer<LuaRegisterDelegate>(
+                luaRegisterPtr
+            );
+            _luaPushClassInstance =
+                Marshal.GetDelegateForFunctionPointer<DelegateLuaPushClassInstance>(
+                    luaPushClassInstancePtr
+                );
         }
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
         private static extern IntPtr LoadLibraryA([MarshalAs(UnmanagedType.LPStr)] string fileName);
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
-        private static extern IntPtr GetProcAddress(IntPtr module, [MarshalAs(UnmanagedType.LPStr)] string procedureName);
+        private static extern IntPtr LoadLibraryExA(
+            [MarshalAs(UnmanagedType.LPStr)] string fileName,
+            IntPtr fileHandle,
+            uint flags
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
+        private static extern IntPtr GetModuleHandleA(
+            [MarshalAs(UnmanagedType.LPStr)] string moduleName
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
+        private static extern IntPtr GetProcAddress(
+            IntPtr module,
+            [MarshalAs(UnmanagedType.LPStr)] string procedureName
+        );
+
+        private const uint LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR = 0x00000100;
+        private const uint LOAD_LIBRARY_SEARCH_DEFAULT_DIRS = 0x00001000;
+
+        private static IntPtr LoadLuaLibrary(string fileName)
+        {
+            var alreadyLoaded = GetModuleHandleA(fileName);
+            if (alreadyLoaded != IntPtr.Zero)
+                return alreadyLoaded;
+
+            var baseDir = AppContext.BaseDirectory;
+            if (!string.IsNullOrEmpty(baseDir))
+            {
+                var fullPath = Path.Combine(baseDir, fileName);
+                if (File.Exists(fullPath))
+                {
+                    var loaded = LoadLibraryExA(
+                        fullPath,
+                        IntPtr.Zero,
+                        LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
+                    );
+                    if (loaded != IntPtr.Zero)
+                        return loaded;
+
+                    loaded = LoadLibraryA(fullPath);
+                    if (loaded != IntPtr.Zero)
+                        return loaded;
+                }
+            }
+
+            var loadedByName = LoadLibraryExA(
+                fileName,
+                IntPtr.Zero,
+                LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
+            );
+            if (loadedByName != IntPtr.Zero)
+                return loadedByName;
+
+            return LoadLibraryA(fileName);
+        }
 
         /// <summary>
         /// Gets a delegate for a function in the Lua module.
@@ -263,7 +365,8 @@ namespace CESDK.Lua
         /// <param name="functionName">The name of the function to retrieve.</param>
         /// <returns>A delegate for the specified function.</returns>
         /// <exception cref="InvalidOperationException"></exception>
-        private static T GetDelegate<T>(IntPtr module, string functionName) where T : class
+        private static T GetDelegate<T>(IntPtr module, string functionName)
+            where T : class
         {
             var address = GetProcAddress(module, functionName);
             if (address == IntPtr.Zero)
@@ -278,7 +381,11 @@ namespace CESDK.Lua
         /// <summary>
         /// Factory that creates a LuaNative instance from CE's exported function pointers.
         /// </summary>
-        public static LuaNative CreateFromPointers(IntPtr getLuaStatePtr, IntPtr luaRegisterPtr, IntPtr luaPushClassInstancePtr)
+        public static LuaNative CreateFromPointers(
+            IntPtr getLuaStatePtr,
+            IntPtr luaRegisterPtr,
+            IntPtr luaPushClassInstancePtr
+        )
         {
             try
             {
@@ -288,7 +395,10 @@ namespace CESDK.Lua
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Failed to initialize LuaNative from pointers: {ex.Message}", ex);
+                throw new InvalidOperationException(
+                    $"Failed to initialize LuaNative from pointers: {ex.Message}",
+                    ex
+                );
             }
         }
 
@@ -389,7 +499,8 @@ namespace CESDK.Lua
         /// <remarks>
         /// The size parameters are optimization hints to pre-allocate the table structure.
         /// </remarks>
-        public void CreateTable(int arraySize = 0, int recordSize = 0) => _createTable(LuaState, arraySize, recordSize);
+        public void CreateTable(int arraySize = 0, int recordSize = 0) =>
+            _createTable(LuaState, arraySize, recordSize);
 
         /// <summary>
         /// Gets the type of the value at the specified stack index.
@@ -458,7 +569,9 @@ namespace CESDK.Lua
         public void PushCEObject(IntPtr ceObject)
         {
             if (_luaPushClassInstance == null)
-                throw new InvalidOperationException("LuaPushClassInstance not available. Initialize LuaNative with CE function pointer.");
+                throw new InvalidOperationException(
+                    "LuaPushClassInstance not available. Initialize LuaNative with CE function pointer."
+                );
 
             _luaPushClassInstance(LuaState, ceObject);
         }
@@ -528,7 +641,18 @@ namespace CESDK.Lua
         /// <remarks>
         /// Numbers and numeric strings are converted to integers. Other types return 0.
         /// </remarks>
-        public int ToInteger(int index) => (int)_toInteger(LuaState, index, IntPtr.Zero);
+        public int ToInteger(int index) => (int)ToInt64(index);
+
+        /// <summary>
+        /// Converts the value at the specified index to a 64-bit integer.
+        /// </summary>
+        /// <param name="index">The stack index of the value to convert.</param>
+        /// <returns>The 64-bit integer value, or 0 if conversion fails.</returns>
+        /// <remarks>
+        /// Numbers and numeric strings are converted to integers. Other types return 0.
+        /// This is the preferred way to retrieve 64-bit addresses from Lua.
+        /// </remarks>
+        public long ToInt64(int index) => _toInteger(LuaState, index, IntPtr.Zero);
 
         /// <summary>
         /// Converts the value at the specified index to a floating-point number.
@@ -571,7 +695,9 @@ namespace CESDK.Lua
         /// <para>On success, arguments and function are removed, and results are pushed.</para>
         /// <para>On error, the error message is pushed onto the stack.</para>
         /// </remarks>
-        public int PCall(int nargs, int nresults) => _pcall(LuaState, nargs, nresults, 0);
+        public int PCall(int nargs, int nresults) =>
+            _pcall(LuaState, nargs, nresults, 0, IntPtr.Zero, IntPtr.Zero);
+
         /// <summary>
         /// Calls a function without error protection.
         /// </summary>
@@ -581,7 +707,9 @@ namespace CESDK.Lua
         /// <para>Unlike PCall, this will terminate the program if an error occurs.</para>
         /// <para>Use PCall for safer function calls with error handling.</para>
         /// </remarks>
-        public void Call(int nargs, int nresults) => _call(LuaState, nargs, nresults, IntPtr.Zero, IntPtr.Zero);
+        public void Call(int nargs, int nresults) =>
+            _call(LuaState, nargs, nresults, IntPtr.Zero, IntPtr.Zero);
+
         /// <summary>
         /// Loads and compiles a Lua script from a string.
         /// </summary>
@@ -624,6 +752,7 @@ namespace CESDK.Lua
         /// <param name="index">The stack index of the table.</param>
         /// <param name="key">The field name to set.</param>
         public void SetField(int index, string key) => _setField(LuaState, index, key);
+
         /// <summary>
         /// Sets a value in a table using the key and value at the top of the stack.
         /// </summary>
@@ -673,7 +802,11 @@ namespace CESDK.Lua
         /// <remarks>
         /// Elements above the removed index are shifted down to fill the gap.
         /// </remarks>
-        public void Remove(int index) { Rotate(index, -1); Pop(1); }
+        public void Remove(int index)
+        {
+            Rotate(index, -1);
+            Pop(1);
+        }
 
         /// <summary>
         /// Moves the top element to the specified position, shifting other elements up.
@@ -691,7 +824,11 @@ namespace CESDK.Lua
         /// <remarks>
         /// The top element is copied to the specified index and then removed from the top.
         /// </remarks>
-        public void Replace(int index) { Copy(-1, index); Pop(1); }
+        public void Replace(int index)
+        {
+            Copy(-1, index);
+            Pop(1);
+        }
 
         /// <summary>
         /// Checks if the value at the specified index is heavy userdata (full userdata with metatable).
@@ -856,7 +993,6 @@ namespace CESDK.Lua
             }
         }
 
-
         /// <summary>
         /// Registers a C# function as a global Lua function using standard Lua API.
         /// </summary>
@@ -890,7 +1026,9 @@ namespace CESDK.Lua
         public void RegisterCEFunction(string functionName, LuaCFunction function)
         {
             if (_luaRegister == null)
-                throw new InvalidOperationException("LuaRegister not available. Initialize LuaNative with CE function pointers.");
+                throw new InvalidOperationException(
+                    "LuaRegister not available. Initialize LuaNative with CE function pointers."
+                );
 
             if (function == null)
                 throw new ArgumentNullException(nameof(function));

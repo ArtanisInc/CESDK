@@ -129,7 +129,7 @@ namespace CESDK.Utils
 
             if (lua.IsNumber(-1))
             {
-                address = (ulong)lua.ToInteger(-1);
+                address = (ulong)lua.ToInt64(-1);
             }
             else if (lua.IsString(-1))
             {
