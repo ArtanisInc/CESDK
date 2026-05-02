@@ -170,14 +170,14 @@ namespace CESDK.Classes
                 {
                     ScanOption = ScanOption.soExactValue,
                     VarType = VariableType.vtByteArray,
-                    Input1 = pattern,
+                    Input1 = pattern ?? string.Empty,
                     StartAddress = startAddress,
                     StopAddress = stopAddress,
                     ProtectionFlags = protectionFlags ?? string.Empty,
                     AlignmentType = (AlignmentType)alignmentType,
                     AlignmentParam = string.IsNullOrWhiteSpace(alignmentParam)
                         ? "1"
-                        : alignmentParam,
+                        : alignmentParam!,
                     IsHexadecimalInput = true,
                 }
             );
@@ -189,7 +189,7 @@ namespace CESDK.Classes
             for (var i = 0; i < count; i++)
             {
                 var addressText = scanner.GetResultAddress(i);
-                if (TryParseAddressText(addressText, out var address))
+                if (TryParseAddressText(addressText!, out var address))
                     addresses.Add(address);
             }
 
@@ -546,7 +546,7 @@ namespace CESDK.Classes
             if (string.IsNullOrWhiteSpace(addressText))
                 return false;
 
-            var trimmed = addressText.Trim();
+            var trimmed = addressText!.Trim();
             if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 trimmed = trimmed.Substring(2);
 

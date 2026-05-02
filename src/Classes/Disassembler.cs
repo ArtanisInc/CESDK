@@ -95,12 +95,16 @@ namespace CESDK.Classes
                 return null;
 
             var parts = disassembledString.Split(
-                " - ",
+                new[] { " - " },
                 3,
-                StringSplitOptions.TrimEntries
+                StringSplitOptions.None
             );
             if (parts.Length < 3)
                 return null;
+
+            // Trim entries manually for .NET Standard 2.0 compatibility
+            for (int i = 0; i < parts.Length; i++)
+                parts[i] = parts[i].Trim();
 
             return new DisassembledInstruction
             {
