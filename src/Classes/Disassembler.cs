@@ -25,9 +25,9 @@ namespace CESDK.Classes
     {
         private static readonly LuaNative lua = PluginContext.Lua;
 
-        public static string? Disassemble(ulong address) =>
+        public static string? Disassemble(ulong address, int maxSize = 512) =>
             WrapException(() => LuaUtils.CallLuaFunction("disassemble", $"disassemble at 0x{address:X}",
-                () => PluginContext.Lua.ToString(-1), address));
+                () => PluginContext.Lua.ToString(-1), address, maxSize));
 
         public static int GetInstructionSize(ulong address) =>
             WrapException(() => LuaUtils.CallLuaFunction("getInstructionSize", $"get instruction size at 0x{address:X}",
@@ -45,41 +45,70 @@ namespace CESDK.Classes
         /// </summary>
         public static ulong GetPreviousOpcode(ulong address) =>
             WrapException(() => LuaUtils.CallLuaFunction("getPreviousOpcode", $"get previous opcode at 0x{address:X}",
-                () => (ulong)lua.ToInteger(-1), address));
+                () => unchecked((ulong)lua.ToInt64(-1)), address));
 
         /// <summary>
         /// Splits a disassembled string into its components: address, bytes, opcode, extra.
         /// </summary>
         public static DisassembledInstruction SplitDisassembledString(string disassembledString)
         {
+            var parsed = ParseCeDisassembly(disassembledString);
+            if (parsed != null)
+                return parsed;
+
             return WrapException(() =>
             {
-                lua.GetGlobal("splitDisassembledString");
-                if (!lua.IsFunction(-1))
+                var initialTop = lua.GetTop();
+                try
                 {
-                    lua.Pop(1);
-                    throw new InvalidOperationException("splitDisassembledString function not available");
-                }
+                    lua.GetGlobal("splitDisassembledString");
+                    if (!lua.IsFunction(-1))
+                        throw new InvalidOperationException("splitDisassembledString function not available");
 
-                lua.PushString(disassembledString);
-                var result = lua.PCall(1, 4);
-                if (result != 0)
-                {
-                    var error = lua.ToString(-1);
-                    lua.Pop(1);
-                    throw new InvalidOperationException($"splitDisassembledString() failed: {error}");
-                }
+                    lua.PushString(disassembledString);
+                    var result = lua.PCall(1, 4);
+                    if (result != 0)
+                    {
+                        var error = lua.ToString(-1);
+                        throw new InvalidOperationException($"splitDisassembledString() failed: {error}");
+                    }
 
-                var instruction = new DisassembledInstruction
+                    var instruction = new DisassembledInstruction
+                    {
+                        Address = lua.ToString(-4) ?? "",
+                        Bytes = lua.ToString(-3) ?? "",
+                        Opcode = lua.ToString(-2) ?? "",
+                        Extra = lua.ToString(-1) ?? ""
+                    };
+                    return instruction;
+                }
+                finally
                 {
-                    Address = lua.ToString(-4) ?? "",
-                    Bytes = lua.ToString(-3) ?? "",
-                    Opcode = lua.ToString(-2) ?? "",
-                    Extra = lua.ToString(-1) ?? ""
-                };
-                lua.Pop(4);
-                return instruction;
+                    lua.SetTop(initialTop);
+                }
             });
+        }
+
+        private static DisassembledInstruction? ParseCeDisassembly(string disassembledString)
+        {
+            if (string.IsNullOrWhiteSpace(disassembledString))
+                return null;
+
+            var parts = disassembledString.Split(
+                " - ",
+                3,
+                StringSplitOptions.TrimEntries
+            );
+            if (parts.Length < 3)
+                return null;
+
+            return new DisassembledInstruction
+            {
+                Address = parts[0],
+                Bytes = parts[1],
+                Opcode = parts[2],
+                Extra = "",
+            };
         }
 
         /// <summary>
@@ -96,26 +125,29 @@ namespace CESDK.Classes
         {
             return WrapException(() =>
             {
-                lua.GetGlobal("getFunctionRange");
-                if (!lua.IsFunction(-1))
+                var initialTop = lua.GetTop();
+                try
                 {
-                    lua.Pop(1);
-                    throw new InvalidOperationException("getFunctionRange function not available");
-                }
+                    lua.GetGlobal("getFunctionRange");
+                    if (!lua.IsFunction(-1))
+                        throw new InvalidOperationException("getFunctionRange function not available");
 
-                lua.PushInteger((long)address);
-                var result = lua.PCall(1, 2);
-                if (result != 0)
+                    lua.PushInteger((long)address);
+                    var result = lua.PCall(1, 2);
+                    if (result != 0)
+                    {
+                        var error = lua.ToString(-1);
+                        throw new InvalidOperationException($"getFunctionRange() failed: {error}");
+                    }
+
+                    var start = unchecked((ulong)lua.ToInt64(-2));
+                    var end = unchecked((ulong)lua.ToInt64(-1));
+                    return (start, end);
+                }
+                finally
                 {
-                    var error = lua.ToString(-1);
-                    lua.Pop(1);
-                    throw new InvalidOperationException($"getFunctionRange() failed: {error}");
+                    lua.SetTop(initialTop);
                 }
-
-                var start = (ulong)lua.ToInteger(-2);
-                var end = (ulong)lua.ToInteger(-1);
-                lua.Pop(2);
-                return (start, end);
             });
         }
 

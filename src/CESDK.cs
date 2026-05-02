@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using CESDK.Lua;
-using System.IO;
 
 namespace CESDK
 {
@@ -17,7 +16,11 @@ namespace CESDK
         public IntPtr CheckSynchronize;
     }
 
-    [SuppressMessage("Naming", "S101:Types should be named in PascalCase", Justification = "CESDK is an acronym")]
+    [SuppressMessage(
+        "Naming",
+        "S101:Types should be named in PascalCase",
+        Justification = "CESDK is an acronym"
+    )]
     public class CESDK
     {
         private const int PLUGIN_VERSION = 6;
@@ -32,10 +35,16 @@ namespace CESDK
         #region Delegates
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate bool delegateGetVersion(ref TPluginVersion PluginVersion, int TPluginVersionSize);
+        private delegate bool delegateGetVersion(
+            ref TPluginVersion PluginVersion,
+            int TPluginVersionSize
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
-        private delegate bool delegateEnablePlugin(ref TExportedFunctions ExportedFunctions, uint pluginid);
+        private delegate bool delegateEnablePlugin(
+            ref TExportedFunctions ExportedFunctions,
+            uint pluginid
+        );
 
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate bool delegateDisablePlugin();
@@ -51,6 +60,11 @@ namespace CESDK
         private readonly delegateDisablePlugin? delDisablePlugin;
         private delegateProcessMessages? delProcessMessages;
         private delegateCheckSynchronize? delCheckSynchronize;
+
+        private static Action? _synchronizeAction;
+        private static Exception? _synchronizeCaughtException;
+        private static readonly LuaNative.LuaCFunction SynchronizeCallback =
+            SynchronizeCallbackImpl;
 
         #endregion
 
@@ -100,11 +114,21 @@ namespace CESDK
 
                 mainSelf.pluginExports = ExportedFunctions;
 
-                mainSelf.delProcessMessages ??= Marshal.GetDelegateForFunctionPointer<delegateProcessMessages>(mainSelf.pluginExports.ProcessMessages);
-                mainSelf.delCheckSynchronize ??= Marshal.GetDelegateForFunctionPointer<delegateCheckSynchronize>(mainSelf.pluginExports.CheckSynchronize);
+                mainSelf.delProcessMessages ??=
+                    Marshal.GetDelegateForFunctionPointer<delegateProcessMessages>(
+                        mainSelf.pluginExports.ProcessMessages
+                    );
+                mainSelf.delCheckSynchronize ??=
+                    Marshal.GetDelegateForFunctionPointer<delegateCheckSynchronize>(
+                        mainSelf.pluginExports.CheckSynchronize
+                    );
 
                 // Initialize Lua with CE's exported functions
-                PluginContext.Initialize(ExportedFunctions.GetLuaState, ExportedFunctions.LuaRegister, ExportedFunctions.LuaPushClassInstance);
+                PluginContext.Initialize(
+                    ExportedFunctions.GetLuaState,
+                    ExportedFunctions.LuaRegister,
+                    ExportedFunctions.LuaPushClassInstance
+                );
 
                 // Call the plugin enable hook
                 CurrentPlugin.EnablePlugin();
@@ -146,6 +170,19 @@ namespace CESDK
             return mainSelf?.delCheckSynchronize?.Invoke(timeout) ?? false;
         }
 
+        private static int SynchronizeCallbackImpl(IntPtr state)
+        {
+            try
+            {
+                _synchronizeAction?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                _synchronizeCaughtException = ex;
+            }
+            return 0;
+        }
+
         /// <summary>
         /// Executes an action on the GUI thread using CE's synchronize() function.
         /// This is required for operations that interact with CE's UI components like the address list.
@@ -154,34 +191,64 @@ namespace CESDK
         public static void Synchronize(Action action)
         {
             var lua = PluginContext.Lua;
-            Exception? caughtException = null;
 
-            // Register a temporary Lua function that will call our action
-            lua.RegisterFunction("__cesdk_sync_callback", () =>
-            {
-                try
-                {
-                    action();
-                }
-                catch (Exception ex)
-                {
-                    caughtException = ex;
-                }
-            });
+            // This function is called with CeLuaGate held by the MCP layer.
+            // Use a stable callback delegate to avoid per-call delegate allocation.
+            if (_synchronizeAction != null)
+                throw new InvalidOperationException("Nested Synchronize calls are not supported");
 
+            var previousTop = lua.GetTop();
+            _synchronizeAction = action;
+            _synchronizeCaughtException = null;
             try
             {
-                // Call synchronize with our callback
-                lua.DoString("synchronize(__cesdk_sync_callback)");
+                // __cesdk_sync_callback = <cfunction>
+                lua.PushCFunction(SynchronizeCallback);
+                lua.SetGlobal("__cesdk_sync_callback");
 
-                // If the action threw an exception, rethrow it
-                if (caughtException != null)
-                    throw caughtException;
+                // synchronize(__cesdk_sync_callback)
+                lua.GetGlobal("synchronize");
+                if (!lua.IsFunction(-1))
+                {
+                    lua.Pop(1);
+                    throw new InvalidOperationException("synchronize function not available");
+                }
+                lua.GetGlobal("__cesdk_sync_callback");
+                if (!lua.IsFunction(-1))
+                {
+                    lua.Pop(2);
+                    throw new InvalidOperationException(
+                        "__cesdk_sync_callback registration failed"
+                    );
+                }
+
+                var result = lua.PCall(1, 0);
+                if (result != 0)
+                {
+                    var error = lua.ToString(-1);
+                    lua.Pop(1);
+                    throw new InvalidOperationException($"synchronize() call failed: {error}");
+                }
+
+                if (_synchronizeCaughtException != null)
+                    throw _synchronizeCaughtException;
             }
             finally
             {
-                // Clean up the global function
-                lua.DoString("__cesdk_sync_callback = nil");
+                try
+                {
+                    // __cesdk_sync_callback = nil
+                    lua.PushNil();
+                    lua.SetGlobal("__cesdk_sync_callback");
+                }
+                catch (Exception cleanupEx)
+                {
+                    // best-effort cleanup; never hide original exception
+                    System.Diagnostics.Debug.WriteLine(cleanupEx);
+                }
+
+                _synchronizeAction = null;
+                lua.SetTop(previousTop);
             }
         }
 
@@ -194,7 +261,10 @@ namespace CESDK
         public static T Synchronize<T>(Func<T> func)
         {
             T result = default!;
-            Synchronize(() => { result = func(); });
+            Synchronize(() =>
+            {
+                result = func();
+            });
             return result;
         }
 
@@ -234,9 +304,13 @@ namespace CESDK
                 {
                     name = PluginNamePtr,
                     getVersionPtr = Marshal.GetFunctionPointerForDelegate(mainSelf.delGetVersion!),
-                    enablePluginPtr = Marshal.GetFunctionPointerForDelegate(mainSelf.delEnablePlugin!),
-                    disablePluginPtr = Marshal.GetFunctionPointerForDelegate(mainSelf.delDisablePlugin!),
-                    version = PLUGIN_VERSION
+                    enablePluginPtr = Marshal.GetFunctionPointerForDelegate(
+                        mainSelf.delEnablePlugin!
+                    ),
+                    disablePluginPtr = Marshal.GetFunctionPointerForDelegate(
+                        mainSelf.delDisablePlugin!
+                    ),
+                    version = PLUGIN_VERSION,
                 };
 
                 Marshal.StructureToPtr(pluginInit, (IntPtr)address, false);

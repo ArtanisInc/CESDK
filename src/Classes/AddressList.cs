@@ -6,8 +6,11 @@ namespace CESDK.Classes
 {
     public class AddressListException : CesdkException
     {
-        public AddressListException(string message) : base(message) { }
-        public AddressListException(string message, Exception innerException) : base(message, innerException) { }
+        public AddressListException(string message)
+            : base(message) { }
+
+        public AddressListException(string message, Exception innerException)
+            : base(message, innerException) { }
     }
 
     /// <summary>
@@ -19,6 +22,9 @@ namespace CESDK.Classes
         internal MemoryRecord()
         {
             // Empty constructor for setting CE object from stack
+            // MemoryRecord objects are owned by CE's address list UI; do NOT auto-destroy them
+            // from the GC finalizer thread.
+            SuppressDestroy = true;
         }
 
         /// <summary>
@@ -30,6 +36,10 @@ namespace CESDK.Classes
                 throw new AddressListException("Top of stack is not a MemoryRecord CE object");
 
             SetCEObjectFromStack();
+
+            // CE owns the lifetime of MemoryRecord instances in the address list.
+            // Deleting them must be explicit (destroy), not via finalizer.
+            SuppressDestroy = true;
         }
 
         /// <summary>
@@ -412,6 +422,10 @@ namespace CESDK.Classes
                     CEObject = lua.ToCEObject(-1);
                 else
                     throw new AddressListException("getAddressList did not return a valid object");
+
+                // AddressList is a CE-owned singleton UI object.
+                // Never destroy it from a GC finalizer.
+                SuppressDestroy = true;
             }
             finally
             {
@@ -496,7 +510,9 @@ namespace CESDK.Classes
                 if (!lua.IsFunction(-1))
                 {
                     lua.Pop(2);
-                    throw new AddressListException("getMemoryRecordByDescription method not available");
+                    throw new AddressListException(
+                        "getMemoryRecordByDescription method not available"
+                    );
                 }
                 lua.PushValue(-2); // self
                 lua.PushString(description);
@@ -515,7 +531,10 @@ namespace CESDK.Classes
             }
             catch (Exception ex) when (ex is not AddressListException)
             {
-                throw new AddressListException($"Failed to get memory record by description '{description}'", ex);
+                throw new AddressListException(
+                    $"Failed to get memory record by description '{description}'",
+                    ex
+                );
             }
         }
 
@@ -532,7 +551,9 @@ namespace CESDK.Classes
                 if (!lua.IsFunction(-1))
                 {
                     lua.Pop(2);
-                    throw new AddressListException("getMemoryRecordsWithDescription method not available");
+                    throw new AddressListException(
+                        "getMemoryRecordsWithDescription method not available"
+                    );
                 }
                 lua.PushValue(-2); // self
                 lua.PushString(description);
@@ -559,7 +580,10 @@ namespace CESDK.Classes
             }
             catch (Exception ex) when (ex is not AddressListException)
             {
-                throw new AddressListException($"Failed to get memory records with description '{description}'", ex);
+                throw new AddressListException(
+                    $"Failed to get memory records with description '{description}'",
+                    ex
+                );
             }
         }
 

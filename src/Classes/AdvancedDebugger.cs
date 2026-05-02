@@ -1,29 +1,30 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using CESDK.Utils;
 
 namespace CESDK.Classes
 {
     public enum BreakpointTrigger
     {
-        Execute = 0,  // bptExecute - break on instruction execution
-        Access = 1,   // bptAccess - break on memory read/write
-        Write = 2     // bptWrite - break on memory write
+        Execute = 0, // bptExecute - break on instruction execution
+        Access = 1, // bptAccess - break on memory read/write
+        Write = 2, // bptWrite - break on memory write
     }
 
     public enum BreakpointMethod
     {
-        Auto = -1,           // nil - Let CE choose the best method automatically
-        DebugRegister = 0,   // bpmDebugRegister - Hardware debug registers (DR0-DR3, limited to 4 breakpoints but fast)
-        Exception = 1,       // bpmException - Exception-based breakpoints (modifies page permissions)
-        Int3 = 2            // bpmInt3 - Software breakpoint (inserts INT3/0xCC instruction, unlimited but modifies code)
+        Auto = -1, // nil - Let CE choose the best method automatically
+        DebugRegister = 0, // bpmDebugRegister - Hardware debug registers (DR0-DR3, limited to 4 breakpoints but fast)
+        Exception = 1, // bpmException - Exception-based breakpoints (modifies page permissions)
+        Int3 = 2, // bpmInt3 - Software breakpoint (inserts INT3/0xCC instruction, unlimited but modifies code)
     }
 
     public enum ContinueMethod
     {
-        Run = 0,       // co_run - just continue
-        StepInto = 1,  // co_stepinto - step into calls
-        StepOver = 2   // co_stepover - step over calls
+        Run = 0, // co_run - just continue
+        StepInto = 1, // co_stepinto - step into calls
+        StepOver = 2, // co_stepover - step over calls
     }
 
     public class RegisterContext
@@ -62,8 +63,11 @@ namespace CESDK.Classes
 
     public class AdvancedDebuggerException : CesdkException
     {
-        public AdvancedDebuggerException(string message) : base(message) { }
-        public AdvancedDebuggerException(string message, Exception innerException) : base(message, innerException) { }
+        public AdvancedDebuggerException(string message)
+            : base(message) { }
+
+        public AdvancedDebuggerException(string message, Exception innerException)
+            : base(message, innerException) { }
     }
 
     public static class AdvancedDebugger
@@ -74,7 +78,9 @@ namespace CESDK.Classes
         /// </summary>
         /// <returns>True if successfully detached</returns>
         public static bool StopDebugger() =>
-            WrapException(() => LuaUtils.CallLuaFunction("detachIfPossible", "detach debugger", () => true));
+            WrapException(() =>
+                LuaUtils.CallLuaFunction("detachIfPossible", "detach debugger", () => true)
+            );
 
         /// <summary>
         /// Starts the debugger for the currently opened process.
@@ -101,59 +107,70 @@ namespace CESDK.Classes
         /// <param name="method">Breakpoint implementation method (Auto = let CE decide)</param>
         /// <param name="luaCallback">Optional Lua callback function to execute on breakpoint hit</param>
         /// <returns>True if successful</returns>
-        public static bool SetBreakpoint(long address, int size = 1, BreakpointTrigger trigger = BreakpointTrigger.Execute, BreakpointMethod method = BreakpointMethod.Auto, string? luaCallback = null)
+        public static bool SetBreakpoint(
+            long address,
+            int size = 1,
+            BreakpointTrigger trigger = BreakpointTrigger.Execute,
+            BreakpointMethod method = BreakpointMethod.Auto,
+            string? luaCallback = null
+        )
         {
             return WrapException(() =>
             {
                 var lua = PluginContext.Lua;
 
-                return LuaUtils.CallLuaFunction("debug_setBreakpoint", "set breakpoint", () =>
+                lua.GetGlobal("debug_setBreakpoint");
+                if (!lua.IsFunction(-1))
                 {
-                    lua.PushInteger(address);
-                    
-                    if (trigger != BreakpointTrigger.Execute)
-                        lua.PushInteger(size);
-                    else
-                        lua.PushNil();
+                    lua.Pop(1);
+                    throw new InvalidOperationException(
+                        "debug_setBreakpoint function not available in this CE version"
+                    );
+                }
 
-                    lua.PushInteger((int)trigger);
+                lua.PushInteger(address);
 
-                    if (method == BreakpointMethod.Auto)
-                        lua.PushNil();
-                    else
-                        lua.PushInteger((int)method);
+                // CE's debug_setBreakpoint expects a size parameter even for execute breakpoints.
+                lua.PushInteger(size <= 0 ? 1 : size);
 
-                    if (!string.IsNullOrEmpty(luaCallback))
-                    {
-                        if (lua.LoadString(luaCallback!) != 0)
-                        {
-                            var error = lua.ToString(-1);
-                            lua.Pop(1);
-                            throw new InvalidOperationException($"Invalid Lua callback: {error}");
-                        }
-                    }
-                    else
-                    {
-                        lua.PushNil();
-                    }
+                lua.PushInteger((int)trigger);
 
-                    var result = lua.PCall(5, 1);
-                    if (result != 0)
+                if (method == BreakpointMethod.Auto)
+                    lua.PushNil();
+                else
+                    lua.PushInteger((int)method);
+
+                if (luaCallback != null && luaCallback.Length != 0)
+                {
+                    string callback = luaCallback;
+                    if (lua.LoadString(callback) != 0)
                     {
                         var error = lua.ToString(-1);
                         lua.Pop(1);
-                        throw new InvalidOperationException($"debug_setBreakpoint() failed: {error}");
+                        throw new InvalidOperationException($"Invalid Lua callback: {error}");
                     }
+                }
+                else
+                {
+                    lua.PushNil();
+                }
 
-                    bool success = true;
-                    if (lua.IsBoolean(-1) && !lua.ToBoolean(-1))
-                        success = false;
-                    else if (lua.IsNumber(-1) && lua.ToInteger(-1) == 0)
-                        success = false;
-
+                var result = lua.PCall(5, 1);
+                if (result != 0)
+                {
+                    var error = lua.ToString(-1);
                     lua.Pop(1);
-                    return success;
-                });
+                    throw new InvalidOperationException($"debug_setBreakpoint() failed: {error}");
+                }
+
+                bool success = true;
+                if (lua.IsBoolean(-1) && !lua.ToBoolean(-1))
+                    success = false;
+                else if (lua.IsNumber(-1) && lua.ToInteger(-1) == 0)
+                    success = false;
+
+                lua.Pop(1);
+                return success;
             });
         }
 
@@ -168,27 +185,35 @@ namespace CESDK.Classes
             {
                 var lua = PluginContext.Lua;
 
-                return LuaUtils.CallLuaFunction("debug_removeBreakpoint", "remove breakpoint", () =>
+                lua.GetGlobal("debug_removeBreakpoint");
+                if (!lua.IsFunction(-1))
                 {
-                    lua.PushInteger(address);
-
-                    var result = lua.PCall(1, 1);
-                    if (result != 0)
-                    {
-                        var error = lua.ToString(-1);
-                        lua.Pop(1);
-                        throw new InvalidOperationException($"debug_removeBreakpoint() failed: {error}");
-                    }
-
-                    bool success = true;
-                    if (lua.IsBoolean(-1) && !lua.ToBoolean(-1))
-                        success = false;
-                    else if (lua.IsNumber(-1) && lua.ToInteger(-1) == 0)
-                        success = false;
-
                     lua.Pop(1);
-                    return success;
-                });
+                    throw new InvalidOperationException(
+                        "debug_removeBreakpoint function not available in this CE version"
+                    );
+                }
+
+                lua.PushInteger(address);
+
+                var result = lua.PCall(1, 1);
+                if (result != 0)
+                {
+                    var error = lua.ToString(-1);
+                    lua.Pop(1);
+                    throw new InvalidOperationException(
+                        $"debug_removeBreakpoint() failed: {error}"
+                    );
+                }
+
+                bool success = true;
+                if (lua.IsBoolean(-1) && !lua.ToBoolean(-1))
+                    success = false;
+                else if (lua.IsNumber(-1) && lua.ToInteger(-1) == 0)
+                    success = false;
+
+                lua.Pop(1);
+                return success;
             });
         }
 
@@ -201,39 +226,58 @@ namespace CESDK.Classes
             return WrapException(() =>
             {
                 var lua = PluginContext.Lua;
-                return LuaUtils.CallLuaFunction("debug_getBreakpointList", "get breakpoint list", () =>
+
+                lua.GetGlobal("debug_getBreakpointList");
+                if (!lua.IsFunction(-1))
                 {
-                    var breakpoints = new List<long>();
-                    var result = lua.PCall(0, 1);
-                    if (result != 0)
-                    {
-                        var error = lua.ToString(-1);
-                        lua.Pop(1);
-                        throw new InvalidOperationException($"debug_getBreakpointList() failed: {error}");
-                    }
-
-                    if (lua.IsTable(-1))
-                    {
-                        lua.PushNil();
-                        while (lua.Next(-2) != 0)
-                        {
-                            if (lua.IsNumber(-1))
-                            {
-                                breakpoints.Add(lua.ToInt64(-1));
-                            }
-                            else if (lua.IsString(-1))
-                            {
-                                var addrStr = lua.ToString(-1);
-                                if (long.TryParse(addrStr.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber, null, out long addr))
-                                    breakpoints.Add(addr);
-                            }
-                            lua.Pop(1);
-                        }
-                    }
-
                     lua.Pop(1);
-                    return breakpoints;
-                });
+                    throw new InvalidOperationException(
+                        "debug_getBreakpointList function not available in this CE version"
+                    );
+                }
+
+                var result = lua.PCall(0, 1);
+                if (result != 0)
+                {
+                    var error = lua.ToString(-1);
+                    lua.Pop(1);
+                    throw new InvalidOperationException(
+                        $"debug_getBreakpointList() failed: {error}"
+                    );
+                }
+
+                var breakpoints = new List<long>();
+                if (lua.IsTable(-1))
+                {
+                    lua.PushNil();
+                    while (lua.Next(-2) != 0)
+                    {
+                        if (lua.IsNumber(-1))
+                        {
+                            breakpoints.Add(lua.ToInt64(-1));
+                        }
+                        else if (lua.IsString(-1))
+                        {
+                            var addrStr = lua.ToString(-1);
+                            var parsed = (addrStr ?? string.Empty).Trim();
+                            if (parsed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                                parsed = parsed.Substring(2);
+                            if (
+                                long.TryParse(
+                                    parsed,
+                                    System.Globalization.NumberStyles.HexNumber,
+                                    CultureInfo.InvariantCulture,
+                                    out long addr
+                                )
+                            )
+                                breakpoints.Add(addr);
+                        }
+                        lua.Pop(1);
+                    }
+                }
+
+                lua.Pop(1);
+                return breakpoints;
             });
         }
 
@@ -246,18 +290,11 @@ namespace CESDK.Classes
         {
             return WrapException(() =>
             {
-                var lua = PluginContext.Lua;
-
-                string methodStr = method switch
-                {
-                    ContinueMethod.Run => "co_run",
-                    ContinueMethod.StepInto => "co_stepinto",
-                    ContinueMethod.StepOver => "co_stepover",
-                    _ => "co_run"
-                };
-
-                lua.GetGlobal(methodStr);
-                LuaUtils.CallVoidLuaFunction("debug_continueFromBreakpoint", "continue from breakpoint", 1);
+                LuaUtils.CallVoidLuaFunction(
+                    "debug_continueFromBreakpoint",
+                    "continue from breakpoint",
+                    (int)method
+                );
                 return true;
             });
         }
@@ -292,7 +329,7 @@ namespace CESDK.Classes
                 context.RBX = GetRegisterValue64("RBX");
                 context.RCX = GetRegisterValue64("RCX");
                 context.RDX = GetRegisterValue64("RDX");
-                context.RSI = GetRegisterValue64("RDI");
+                context.RSI = GetRegisterValue64("RSI");
                 context.RDI = GetRegisterValue64("RDI");
                 context.RBP = GetRegisterValue64("RBP");
                 context.RSP = GetRegisterValue64("RSP");
@@ -331,15 +368,25 @@ namespace CESDK.Classes
         /// Checks if debugger is currently debugging.
         /// </summary>
         public static bool IsDebugging() =>
-            WrapException(() => LuaUtils.CallLuaFunction("debug_isDebugging", "check if debugging", 
-                () => PluginContext.Lua.IsBoolean(-1) && PluginContext.Lua.ToBoolean(-1)));
+            WrapException(() =>
+                LuaUtils.CallLuaFunction(
+                    "debug_isDebugging",
+                    "check if debugging",
+                    () => PluginContext.Lua.IsBoolean(-1) && PluginContext.Lua.ToBoolean(-1)
+                )
+            );
 
         /// <summary>
         /// Checks if debugger is currently broken (halted on breakpoint).
         /// </summary>
         public static bool IsBroken() =>
-            WrapException(() => LuaUtils.CallLuaFunction("debug_isBroken", "check if broken", 
-                () => PluginContext.Lua.IsBoolean(-1) && PluginContext.Lua.ToBoolean(-1)));
+            WrapException(() =>
+                LuaUtils.CallLuaFunction(
+                    "debug_isBroken",
+                    "check if broken",
+                    () => PluginContext.Lua.IsBoolean(-1) && PluginContext.Lua.ToBoolean(-1)
+                )
+            );
 
         private static uint GetRegisterValue(string registerName)
         {
@@ -369,14 +416,26 @@ namespace CESDK.Classes
 
         private static T WrapException<T>(Func<T> operation)
         {
-            try { return operation(); }
-            catch (InvalidOperationException ex) { throw new AdvancedDebuggerException(ex.Message, ex); }
+            try
+            {
+                return operation();
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new AdvancedDebuggerException(ex.Message, ex);
+            }
         }
 
         private static void WrapException(Action operation)
         {
-            try { operation(); }
-            catch (InvalidOperationException ex) { throw new AdvancedDebuggerException(ex.Message, ex); }
+            try
+            {
+                operation();
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new AdvancedDebuggerException(ex.Message, ex);
+            }
         }
     }
 }

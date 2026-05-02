@@ -15,7 +15,9 @@ namespace CESDK.Classes
     {
         public string Name { get; set; } = "";
         public long Address { get; set; }
+        public int Size { get; set; }
         public bool Is64Bit { get; set; }
+        public string PathToFile { get; set; } = "";
     }
 
     public class MemoryRegionInfo
@@ -98,6 +100,18 @@ namespace CESDK.Classes
                         lua.GetField(-1, "Is64Bit");
                         if (lua.IsBoolean(-1))
                             module.Is64Bit = lua.ToBoolean(-1);
+                        lua.Pop(1);
+
+                        // Get Size
+                        lua.GetField(-1, "Size");
+                        if (lua.IsNumber(-1))
+                            module.Size = (int)lua.ToInteger(-1);
+                        lua.Pop(1);
+
+                        // Get PathToFile
+                        lua.GetField(-1, "PathToFile");
+                        if (lua.IsString(-1))
+                            module.PathToFile = lua.ToString(-1) ?? "";
                         lua.Pop(1);
 
                         modules.Add(module);

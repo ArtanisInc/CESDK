@@ -40,50 +40,50 @@ namespace CESDK.Classes
         {
             return WrapException(() =>
             {
-                lua.GetGlobal("enumMemoryRegions");
-                if (!lua.IsFunction(-1))
+                var initialTop = lua.GetTop();
+                try
                 {
-                    lua.Pop(1);
-                    throw new InvalidOperationException("enumMemoryRegions function not available");
-                }
+                    lua.GetGlobal("enumMemoryRegions");
+                    if (!lua.IsFunction(-1))
+                        throw new InvalidOperationException("enumMemoryRegions function not available");
 
-                var result = lua.PCall(0, 1);
-                if (result != 0)
-                {
-                    var error = lua.ToString(-1);
-                    lua.Pop(1);
-                    throw new InvalidOperationException($"enumMemoryRegions() failed: {error}");
-                }
+                    var result = lua.PCall(0, 1);
+                    if (result != 0)
+                    {
+                        var error = lua.ToString(-1);
+                        throw new InvalidOperationException($"enumMemoryRegions() failed: {error}");
+                    }
 
-                var regions = new List<MemoryRegion>();
-                if (!lua.IsTable(-1))
-                {
-                    lua.Pop(1);
+                    var regions = new List<MemoryRegion>();
+                    if (!lua.IsTable(-1))
+                        return regions;
+
+                    lua.PushNil();
+                    while (lua.Next(-2) != 0)
+                    {
+                        if (lua.IsTable(-1))
+                        {
+                            var region = new MemoryRegion
+                            {
+                                BaseAddress = GetTableUlong(-1, "BaseAddress"),
+                                AllocationBase = GetTableUlong(-1, "AllocationBase"),
+                                AllocationProtect = GetTableInt(-1, "AllocationProtect"),
+                                RegionSize = GetTableUlong(-1, "RegionSize"),
+                                State = GetTableInt(-1, "State"),
+                                Protect = GetTableInt(-1, "Protect"),
+                                Type = GetTableInt(-1, "Type")
+                            };
+                            regions.Add(region);
+                        }
+                        lua.Pop(1);
+                    }
+
                     return regions;
                 }
-
-                lua.PushNil();
-                while (lua.Next(-2) != 0)
+                finally
                 {
-                    if (lua.IsTable(-1))
-                    {
-                        var region = new MemoryRegion
-                        {
-                            BaseAddress = GetTableUlong(-1, "BaseAddress"),
-                            AllocationBase = GetTableUlong(-1, "AllocationBase"),
-                            AllocationProtect = GetTableInt(-1, "AllocationProtect"),
-                            RegionSize = GetTableUlong(-1, "RegionSize"),
-                            State = GetTableInt(-1, "State"),
-                            Protect = GetTableInt(-1, "Protect"),
-                            Type = GetTableInt(-1, "Type")
-                        };
-                        regions.Add(region);
-                    }
-                    lua.Pop(1);
+                    lua.SetTop(initialTop);
                 }
-
-                lua.Pop(1);
-                return regions;
             });
         }
 
@@ -94,30 +94,33 @@ namespace CESDK.Classes
         {
             return WrapException(() =>
             {
-                lua.GetGlobal("getMemoryProtection");
-                if (!lua.IsFunction(-1))
+                var initialTop = lua.GetTop();
+                try
                 {
-                    lua.Pop(1);
-                    throw new InvalidOperationException("getMemoryProtection function not available");
-                }
+                    lua.GetGlobal("getMemoryProtection");
+                    if (!lua.IsFunction(-1))
+                        throw new InvalidOperationException("getMemoryProtection function not available");
 
-                lua.PushInteger((long)address);
-                var result = lua.PCall(1, 1);
-                if (result != 0)
-                {
-                    var error = lua.ToString(-1);
-                    lua.Pop(1);
-                    throw new InvalidOperationException($"getMemoryProtection() failed: {error}");
-                }
+                    lua.PushInteger((long)address);
+                    var result = lua.PCall(1, 1);
+                    if (result != 0)
+                    {
+                        var error = lua.ToString(-1);
+                        throw new InvalidOperationException($"getMemoryProtection() failed: {error}");
+                    }
 
-                var prot = new MemoryProtection
+                    var prot = new MemoryProtection
+                    {
+                        Read = GetTableBool(-1, "r"),
+                        Write = GetTableBool(-1, "w"),
+                        Execute = GetTableBool(-1, "x")
+                    };
+                    return prot;
+                }
+                finally
                 {
-                    Read = GetTableBool(-1, "r"),
-                    Write = GetTableBool(-1, "w"),
-                    Execute = GetTableBool(-1, "x")
-                };
-                lua.Pop(1);
-                return prot;
+                    lua.SetTop(initialTop);
+                }
             });
         }
 
@@ -130,7 +133,7 @@ namespace CESDK.Classes
         private static ulong GetTableUlong(int tableIndex, string key)
         {
             lua.GetField(tableIndex, key);
-            var value = lua.IsNumber(-1) ? (ulong)lua.ToInteger(-1) : 0UL;
+            var value = lua.IsNumber(-1) ? (ulong)lua.ToNumber(-1) : 0UL;
             lua.Pop(1);
             return value;
         }

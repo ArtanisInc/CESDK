@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using CESDK.Lua;
 
 namespace CESDK.Utils
@@ -11,7 +12,12 @@ namespace CESDK.Utils
         /// <summary>
         /// Generic method to call Lua functions with automatic parameter handling and error management
         /// </summary>
-        public static T CallLuaFunction<T>(string functionName, string operationName, Func<T> valueExtractor, params object[] args)
+        public static T CallLuaFunction<T>(
+            string functionName,
+            string operationName,
+            Func<T> valueExtractor,
+            params object[] args
+        )
         {
             try
             {
@@ -19,7 +25,9 @@ namespace CESDK.Utils
                 if (!lua.IsFunction(-1))
                 {
                     lua.Pop(1);
-                    throw new InvalidOperationException($"{functionName} function not available in this CE version");
+                    throw new InvalidOperationException(
+                        $"{functionName} function not available in this CE version"
+                    );
                 }
 
                 PushArguments(args);
@@ -49,7 +57,12 @@ namespace CESDK.Utils
         /// <summary>
         /// Calls a Lua function with optional parameters and returns the specified type
         /// </summary>
-        public static T CallLuaFunctionWithOptionalParams<T>(string functionName, string operationName, Func<T> valueExtractor, params object?[] parameters)
+        public static T CallLuaFunctionWithOptionalParams<T>(
+            string functionName,
+            string operationName,
+            Func<T> valueExtractor,
+            params object?[] parameters
+        )
         {
             try
             {
@@ -57,7 +70,9 @@ namespace CESDK.Utils
                 if (!lua.IsFunction(-1))
                 {
                     lua.Pop(1);
-                    throw new InvalidOperationException($"{functionName} function not available in this CE version");
+                    throw new InvalidOperationException(
+                        $"{functionName} function not available in this CE version"
+                    );
                 }
 
                 int paramCount = PushOptionalParameters(parameters);
@@ -87,7 +102,11 @@ namespace CESDK.Utils
         /// <summary>
         /// Helper for void functions that don't return values
         /// </summary>
-        public static void CallVoidLuaFunction(string functionName, string operationName, params object[] args)
+        public static void CallVoidLuaFunction(
+            string functionName,
+            string operationName,
+            params object[] args
+        )
         {
             CallLuaFunction(functionName, operationName, VoidExtractor, args);
         }
@@ -95,8 +114,17 @@ namespace CESDK.Utils
         /// <summary>
         /// Helper for void functions with optional parameters
         /// </summary>
-        public static void CallVoidLuaFunctionWithOptionalParams(string functionName, string operationName, params object?[] parameters) =>
-            CallLuaFunctionWithOptionalParams<object>(functionName, operationName, VoidExtractor, parameters);
+        public static void CallVoidLuaFunctionWithOptionalParams(
+            string functionName,
+            string operationName,
+            params object?[] parameters
+        ) =>
+            CallLuaFunctionWithOptionalParams<object>(
+                functionName,
+                operationName,
+                VoidExtractor,
+                parameters
+            );
 
         /// <summary>
         /// Extracts byte array from Lua table
@@ -134,13 +162,25 @@ namespace CESDK.Utils
             else if (lua.IsString(-1))
             {
                 var addressStr = lua.ToString(-1);
-                if (ulong.TryParse(addressStr, System.Globalization.NumberStyles.HexNumber, null, out var parsedAddress))
+                if (!string.IsNullOrEmpty(addressStr))
                 {
-                    address = parsedAddress;
+                    var trimmed = addressStr.Trim();
+                    if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                        trimmed = trimmed.Substring(2);
+
+                    if (
+                        ulong.TryParse(
+                            trimmed,
+                            NumberStyles.HexNumber,
+                            CultureInfo.InvariantCulture,
+                            out var parsedAddress
+                        )
+                    )
+                    {
+                        address = parsedAddress;
+                    }
                 }
             }
-
-            lua.Pop(1);
             return address;
         }
 
@@ -150,15 +190,33 @@ namespace CESDK.Utils
             {
                 switch (arg)
                 {
-                    case long longValue: lua.PushInteger(longValue); break;
-                    case int intValue: lua.PushInteger(intValue); break;
-                    case ulong ulongValue: lua.PushInteger((long)ulongValue); break;
-                    case short shortValue: lua.PushInteger(shortValue); break;
-                    case byte byteValue: lua.PushInteger(byteValue); break;
-                    case float floatValue: lua.PushNumber(floatValue); break;
-                    case double doubleValue: lua.PushNumber(doubleValue); break;
-                    case string stringValue: lua.PushString(stringValue); break;
-                    case bool boolValue: lua.PushBoolean(boolValue); break;
+                    case long longValue:
+                        lua.PushInteger(longValue);
+                        break;
+                    case int intValue:
+                        lua.PushInteger(intValue);
+                        break;
+                    case ulong ulongValue:
+                        lua.PushInteger((long)ulongValue);
+                        break;
+                    case short shortValue:
+                        lua.PushInteger(shortValue);
+                        break;
+                    case byte byteValue:
+                        lua.PushInteger(byteValue);
+                        break;
+                    case float floatValue:
+                        lua.PushNumber(floatValue);
+                        break;
+                    case double doubleValue:
+                        lua.PushNumber(doubleValue);
+                        break;
+                    case string stringValue:
+                        lua.PushString(stringValue);
+                        break;
+                    case bool boolValue:
+                        lua.PushBoolean(boolValue);
+                        break;
                     case byte[] bytes:
                         lua.CreateTable();
                         for (int i = 0; i < bytes.Length; i++)
@@ -180,7 +238,8 @@ namespace CESDK.Utils
 
             foreach (var param in parameters)
             {
-                if (param == null) continue;
+                if (param == null)
+                    continue;
 
                 switch (param)
                 {

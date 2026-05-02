@@ -164,6 +164,16 @@ namespace CESDK.Classes
         public bool LastScanWasRegionScan => GetBoolProperty("LastScanWasRegionScan");
 
         /// <summary>
+        /// Returns true if the scanner is currently performing a scan.
+        /// </summary>
+        public bool Scanning => GetBoolProperty("Scanning");
+
+        /// <summary>
+        /// Returns the current scan progress (0-100).
+        /// </summary>
+        public int Progress => GetIntProperty("Progress");
+
+        /// <summary>
         /// Returns true if a first scan has been completed (i.e. results exist for a next scan).
         /// </summary>
         public bool HasPreviousScan
@@ -385,6 +395,19 @@ namespace CESDK.Classes
             {
                 lua.SetTop(0);
             }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (Disposed) return;
+
+            if (disposing)
+            {
+                _cachedFoundList?.Dispose();
+                _cachedFoundList = null;
+            }
+
+            base.Dispose(disposing);
         }
 
         #region High-level Result Access (handles FoundList internally)

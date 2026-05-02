@@ -22,10 +22,10 @@ namespace CESDK.Classes
             WrapException(() => LuaUtils.CallLuaFunction("readInteger", $"read integer at 0x{address:X}", () => PluginContext.Lua.ToInteger(-1), address));
 
         public static long ReadQword(ulong address) =>
-            WrapException(() => LuaUtils.CallLuaFunction("readQword", $"read qword at 0x{address:X}", () => PluginContext.Lua.ToInteger(-1), address));
+            WrapException(() => LuaUtils.CallLuaFunction("readQword", $"read qword at 0x{address:X}", () => PluginContext.Lua.ToInt64(-1), address));
 
         public static ulong ReadPointer(ulong address) =>
-            WrapException(() => LuaUtils.CallLuaFunction("readPointer", $"read pointer at 0x{address:X}", () => (ulong)PluginContext.Lua.ToInteger(-1), address));
+            WrapException(() => LuaUtils.CallLuaFunction("readPointer", $"read pointer at 0x{address:X}", () => unchecked((ulong)PluginContext.Lua.ToInt64(-1)), address));
 
         public static float ReadFloat(ulong address) =>
             WrapException(() => LuaUtils.CallLuaFunction("readFloat", $"read float at 0x{address:X}", () => (float)PluginContext.Lua.ToNumber(-1), address));
@@ -37,7 +37,28 @@ namespace CESDK.Classes
             WrapException(() => LuaUtils.CallLuaFunction("readString", $"read string at 0x{address:X}", () => PluginContext.Lua.ToString(-1) ?? "", address, maxLength, isWideChar));
 
         public static byte[] ReadBytes(ulong address, int count, bool returnAsTable = true) =>
-            WrapException(() => LuaUtils.CallLuaFunction("readBytes", $"read {count} bytes at 0x{address:X}", LuaUtils.ExtractBytesFromTable, address, count, returnAsTable));
+            WrapException(() =>
+            {
+                if (count <= 0)
+                    return [];
+
+                var bytes = LuaUtils.CallLuaFunction(
+                    "readBytes",
+                    $"read {count} bytes at 0x{address:X}",
+                    LuaUtils.ExtractBytesFromTable,
+                    address,
+                    count,
+                    returnAsTable
+                );
+
+                if (bytes.Length > 0 || !returnAsTable)
+                    return bytes;
+
+                // Some CE builds/contexts return an empty Lua table for bulk
+                // reads even though scalar reads at the same address succeed.
+                // Retry as multiple return values and collect the stack values.
+                return ReadBytesAsMultipleReturnValues(address, count);
+            });
 
         // Write methods for target process
         public static bool WriteByte(ulong address, byte value) =>
@@ -72,10 +93,10 @@ namespace CESDK.Classes
             WrapException(() => LuaUtils.CallLuaFunction("readIntegerLocal", $"read local integer at 0x{address:X}", () => PluginContext.Lua.ToInteger(-1), address));
 
         public static long ReadQwordLocal(ulong address) =>
-            WrapException(() => LuaUtils.CallLuaFunction("readQwordLocal", $"read local qword at 0x{address:X}", () => PluginContext.Lua.ToInteger(-1), address));
+            WrapException(() => LuaUtils.CallLuaFunction("readQwordLocal", $"read local qword at 0x{address:X}", () => PluginContext.Lua.ToInt64(-1), address));
 
         public static ulong ReadPointerLocal(ulong address) =>
-            WrapException(() => LuaUtils.CallLuaFunction("readPointerLocal", $"read local pointer at 0x{address:X}", () => (ulong)PluginContext.Lua.ToInteger(-1), address));
+            WrapException(() => LuaUtils.CallLuaFunction("readPointerLocal", $"read local pointer at 0x{address:X}", () => unchecked((ulong)PluginContext.Lua.ToInt64(-1)), address));
 
         public static float ReadFloatLocal(ulong address) =>
             WrapException(() => LuaUtils.CallLuaFunction("readFloatLocal", $"read local float at 0x{address:X}", () => (float)PluginContext.Lua.ToNumber(-1), address));
@@ -110,6 +131,55 @@ namespace CESDK.Classes
 
         public static bool WriteBytesLocal(ulong address, byte[] bytes) =>
             WrapException(() => LuaUtils.CallLuaFunction("writeBytesLocal", $"write local {bytes.Length} bytes at 0x{address:X}", () => PluginContext.Lua.ToBoolean(-1), address, bytes));
+
+        public static string? GetRTTIClassName(ulong address) =>
+            WrapException(() => LuaUtils.CallLuaFunction("getRTTIClassName", $"get RTTI class name at 0x{address:X}", () => PluginContext.Lua.ToString(-1), address));
+
+        private static byte[] ReadBytesAsMultipleReturnValues(ulong address, int count)
+        {
+            var lua = PluginContext.Lua;
+            var initialTop = lua.GetTop();
+
+            try
+            {
+                lua.GetGlobal("readBytes");
+                if (!lua.IsFunction(-1))
+                    throw new InvalidOperationException("readBytes function not available in this CE version");
+
+                lua.PushInteger((long)address);
+                lua.PushInteger(count);
+                lua.PushBoolean(false);
+
+                var result = lua.PCall(3, count);
+                if (result != 0)
+                {
+                    var error = lua.ToString(-1);
+                    throw new InvalidOperationException($"readBytes() call failed: {error}");
+                }
+
+                var bytes = new byte[count];
+                var actual = 0;
+                var firstIndex = lua.GetTop() - count + 1;
+                for (int i = 0; i < count; i++)
+                {
+                    var stackIndex = firstIndex + i;
+                    if (!lua.IsNumber(stackIndex))
+                        break;
+
+                    bytes[actual++] = (byte)lua.ToInteger(stackIndex);
+                }
+
+                if (actual == bytes.Length)
+                    return bytes;
+
+                Array.Resize(ref bytes, actual);
+                return bytes;
+            }
+            finally
+            {
+                lua.SetTop(initialTop);
+            }
+        }
 
         private static T WrapException<T>(Func<T> operation)
         {

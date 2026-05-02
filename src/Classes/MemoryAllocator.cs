@@ -5,8 +5,11 @@ namespace CESDK.Classes
 {
     public class MemoryAllocationException : CesdkException
     {
-        public MemoryAllocationException(string message) : base(message) { }
-        public MemoryAllocationException(string message, Exception innerException) : base(message, innerException) { }
+        public MemoryAllocationException(string message)
+            : base(message) { }
+
+        public MemoryAllocationException(string message, Exception innerException)
+            : base(message, innerException) { }
     }
 
     public static class MemoryAllocator
@@ -18,7 +21,11 @@ namespace CESDK.Classes
         /// <param name="baseAddress">Optional preferred base address</param>
         /// <param name="protection">Optional memory protection flags (e.g., "rwx", "rw", "r")</param>
         /// <returns>Address of allocated memory, or 0 if allocation failed</returns>
-        public static long AllocateMemory(int size, long? baseAddress = null, string? protection = null)
+        public static long AllocateMemory(
+            int size,
+            long? baseAddress = null,
+            string? protection = null
+        )
         {
             return WrapException(() =>
             {
@@ -26,45 +33,52 @@ namespace CESDK.Classes
 
                 var lua = PluginContext.Lua;
 
-                return LuaUtils.CallLuaFunction("allocateMemory", "allocate memory", () =>
+                lua.GetGlobal("allocateMemory");
+                if (!lua.IsFunction(-1))
                 {
-                    lua.PushInteger(size);
-                    int paramCount = 1;
-
-                    if (baseAddress.HasValue && baseAddress.Value != 0)
-                    {
-                        lua.PushInteger(baseAddress.Value);
-                        paramCount++;
-                    }
-
-                    if (!string.IsNullOrEmpty(protection))
-                    {
-                        if (paramCount == 1)
-                        {
-                            lua.PushNil();
-                            paramCount++;
-                        }
-                        lua.PushString(protection!);
-                        paramCount++;
-                    }
-
-                    var result = lua.PCall(paramCount, 1);
-                    if (result != 0)
-                    {
-                        var error = lua.ToString(-1);
-                        lua.Pop(1);
-                        throw new InvalidOperationException($"allocateMemory() call failed: {error}");
-                    }
-
-                    long address = 0;
-                    if (lua.IsNumber(-1))
-                    {
-                        address = lua.ToInt64(-1);
-                    }
                     lua.Pop(1);
+                    throw new InvalidOperationException(
+                        "allocateMemory function not available in this CE version"
+                    );
+                }
 
-                    return address;
-                });
+                lua.PushInteger(size);
+                int paramCount = 1;
+
+                if (baseAddress.HasValue && baseAddress.Value != 0)
+                {
+                    lua.PushInteger(baseAddress.Value);
+                    paramCount++;
+                }
+
+                if (protection != null && protection.Length != 0)
+                {
+                    string prot = protection;
+                    if (paramCount == 1)
+                    {
+                        lua.PushNil();
+                        paramCount++;
+                    }
+                    lua.PushString(prot);
+                    paramCount++;
+                }
+
+                var result = lua.PCall(paramCount, 1);
+                if (result != 0)
+                {
+                    var error = lua.ToString(-1);
+                    lua.Pop(1);
+                    throw new InvalidOperationException($"allocateMemory() call failed: {error}");
+                }
+
+                long address = 0;
+                if (lua.IsNumber(-1))
+                {
+                    address = lua.ToInt64(-1);
+                }
+                lua.Pop(1);
+
+                return address;
             });
         }
 
@@ -82,30 +96,36 @@ namespace CESDK.Classes
 
                 var lua = PluginContext.Lua;
 
-                return LuaUtils.CallLuaFunction("deAlloc", "deallocate memory", () =>
+                lua.GetGlobal("deAlloc");
+                if (!lua.IsFunction(-1))
                 {
-                    lua.PushInteger(address);
-                    int paramCount = 1;
-
-                    if (size.HasValue)
-                    {
-                        lua.PushInteger(size.Value);
-                        paramCount++;
-                    }
-
-                    var result = lua.PCall(paramCount, 1);
-                    if (result != 0)
-                    {
-                        var error = lua.ToString(-1);
-                        lua.Pop(1);
-                        throw new InvalidOperationException($"deAlloc() call failed: {error}");
-                    }
-
-                    bool success = lua.IsBoolean(-1) ? lua.ToBoolean(-1) : false;
                     lua.Pop(1);
+                    throw new InvalidOperationException(
+                        "deAlloc function not available in this CE version"
+                    );
+                }
 
-                    return success;
-                });
+                lua.PushInteger(address);
+                int paramCount = 1;
+
+                if (size.HasValue)
+                {
+                    lua.PushInteger(size.Value);
+                    paramCount++;
+                }
+
+                var result = lua.PCall(paramCount, 1);
+                if (result != 0)
+                {
+                    var error = lua.ToString(-1);
+                    lua.Pop(1);
+                    throw new InvalidOperationException($"deAlloc() call failed: {error}");
+                }
+
+                bool success = lua.IsBoolean(-1) && lua.ToBoolean(-1);
+                lua.Pop(1);
+
+                return success;
             });
         }
 
@@ -118,7 +138,13 @@ namespace CESDK.Classes
         /// <param name="writable">Allow write access</param>
         /// <param name="executable">Allow execute access</param>
         /// <returns>True if successful, false otherwise</returns>
-        public static bool SetMemoryProtection(long address, int size, bool readable, bool writable, bool executable)
+        public static bool SetMemoryProtection(
+            long address,
+            int size,
+            bool readable,
+            bool writable,
+            bool executable
+        )
         {
             return WrapException(() =>
             {
@@ -126,32 +152,40 @@ namespace CESDK.Classes
 
                 var lua = PluginContext.Lua;
 
-                return LuaUtils.CallLuaFunction("setMemoryProtection", "set memory protection", () =>
+                lua.GetGlobal("setMemoryProtection");
+                if (!lua.IsFunction(-1))
                 {
-                    lua.PushInteger(address);
-                    lua.PushInteger(size);
-
-                    lua.CreateTable(0, 3);
-                    lua.PushBoolean(readable);
-                    lua.SetField(-2, "R");
-                    lua.PushBoolean(writable);
-                    lua.SetField(-2, "W");
-                    lua.PushBoolean(executable);
-                    lua.SetField(-2, "X");
-
-                    var result = lua.PCall(3, 1);
-                    if (result != 0)
-                    {
-                        var error = lua.ToString(-1);
-                        lua.Pop(1);
-                        throw new InvalidOperationException($"setMemoryProtection() call failed: {error}");
-                    }
-
-                    bool success = lua.IsBoolean(-1) ? lua.ToBoolean(-1) : false;
                     lua.Pop(1);
+                    throw new InvalidOperationException(
+                        "setMemoryProtection function not available in this CE version"
+                    );
+                }
 
-                    return success;
-                });
+                lua.PushInteger(address);
+                lua.PushInteger(size);
+
+                lua.CreateTable(0, 3);
+                lua.PushBoolean(readable);
+                lua.SetField(-2, "R");
+                lua.PushBoolean(writable);
+                lua.SetField(-2, "W");
+                lua.PushBoolean(executable);
+                lua.SetField(-2, "X");
+
+                var result = lua.PCall(3, 1);
+                if (result != 0)
+                {
+                    var error = lua.ToString(-1);
+                    lua.Pop(1);
+                    throw new InvalidOperationException(
+                        $"setMemoryProtection() call failed: {error}"
+                    );
+                }
+
+                bool success = lua.IsBoolean(-1) && lua.ToBoolean(-1);
+                lua.Pop(1);
+
+                return success;
             });
         }
 
@@ -171,14 +205,26 @@ namespace CESDK.Classes
 
         private static T WrapException<T>(Func<T> operation)
         {
-            try { return operation(); }
-            catch (InvalidOperationException ex) { throw new MemoryAllocationException(ex.Message, ex); }
+            try
+            {
+                return operation();
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new MemoryAllocationException(ex.Message, ex);
+            }
         }
 
         private static void WrapException(Action operation)
         {
-            try { operation(); }
-            catch (InvalidOperationException ex) { throw new MemoryAllocationException(ex.Message, ex); }
+            try
+            {
+                operation();
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new MemoryAllocationException(ex.Message, ex);
+            }
         }
     }
 }

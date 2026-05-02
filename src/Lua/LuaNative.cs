@@ -556,7 +556,10 @@ namespace CESDK.Lua
             if (function == null)
                 throw new ArgumentNullException(nameof(function));
 
-            _keepAlive.Add(function);
+            // Keep delegate alive for the lifetime of this LuaNative instance.
+            // Avoid unbounded growth if the same delegate is pushed repeatedly.
+            if (!_keepAlive.Contains(function))
+                _keepAlive.Add(function);
             var functionPtr = Marshal.GetFunctionPointerForDelegate(function);
             _pushCFunction(LuaState, functionPtr, 0);
         }
@@ -1034,7 +1037,9 @@ namespace CESDK.Lua
                 throw new ArgumentNullException(nameof(function));
 
             // Keep the function alive to prevent garbage collection
-            _keepAlive.Add(function);
+            // Avoid unbounded growth if called repeatedly with the same delegate.
+            if (!_keepAlive.Contains(function))
+                _keepAlive.Add(function);
 
             // Register with CE's LuaRegister - it uses the dynamic LuaState
             _luaRegister(LuaState, functionName, function);

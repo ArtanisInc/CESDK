@@ -93,6 +93,16 @@ namespace CESDK.Classes
                     lua.Pop(1);
                 }
 
+                lua.GetField(-1, "destroy");
+                if (lua.IsFunction(-1))
+                {
+                    lua.PCall(0, 0);
+                }
+                else
+                {
+                    lua.Pop(1);
+                }
+
                 lua.Pop(1); // Pop StringList object
             }
             catch (Exception ex) when (ex is not ThreadListException)

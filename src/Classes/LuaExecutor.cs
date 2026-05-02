@@ -105,7 +105,7 @@ namespace CESDK.Classes
                 0 => null,                                              // LUA_TNIL
                 1 => lua.ToBoolean(index),                              // LUA_TBOOLEAN
                 3 => lua.IsInteger(index)                               // LUA_TNUMBER
-                    ? (object)lua.ToInteger(index)
+                    ? (object)lua.ToInt64(index)
                     : lua.ToNumber(index),
                 4 => lua.ToString(index),                               // LUA_TSTRING
                 5 => ReadTable(index, depth),                           // LUA_TTABLE
@@ -216,7 +216,7 @@ namespace CESDK.Classes
             int keyType = lua.Type(index);
             return keyType switch
             {
-                3 => lua.IsInteger(index) ? lua.ToInteger(index).ToString() : lua.ToNumber(index).ToString(),
+                3 => lua.IsInteger(index) ? lua.ToInt64(index).ToString() : lua.ToNumber(index).ToString(),
                 4 => lua.ToString(index) ?? "",
                 1 => lua.ToBoolean(index).ToString(),
                 _ => $"[{GetTypeName(keyType)}]"
