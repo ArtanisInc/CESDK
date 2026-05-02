@@ -273,8 +273,9 @@ namespace CESDK.Classes
                     lua.Pop(2);
                     throw new AddressListException("getOffset method not available");
                 }
+                lua.PushValue(-2); // self
                 lua.PushInteger(index);
-                lua.PCall(1, 1);
+                lua.PCall(2, 1);
                 var result = lua.ToInteger(-1);
                 lua.Pop(2);
                 return result;
@@ -299,9 +300,10 @@ namespace CESDK.Classes
                     lua.Pop(2);
                     throw new AddressListException("setOffset method not available");
                 }
+                lua.PushValue(-2); // self
                 lua.PushInteger(index);
                 lua.PushInteger(value);
-                lua.PCall(2, 0);
+                lua.PCall(3, 0);
                 lua.Pop(1);
             }
             catch (Exception ex) when (ex is not AddressListException)
