@@ -18,7 +18,6 @@ CeMCP MCP tools
 CESDK is not a standalone memory editor. It is a plugin-side SDK that expects to run
 inside Cheat Engine with access to Cheat Engine's Lua state and CE object handles.
 
-The local `celua.txt` file documents the Cheat Engine-specific Lua functions and variables
 that CESDK wraps, such as `readBytes`, `AOBScan`, `createMemScan`, `debug_setBreakpoint`,
 `enumMemoryRegions`, `disassemble`, and `setMemoryProtection`.
 
@@ -47,31 +46,31 @@ dotnet build -c Release
 
 ## Core classes
 
-| Class | Purpose |
-| --- | --- |
-| `LuaExecutor` | Execute Lua and serialize return values. |
-| `LuaLogger` | Logging helpers for CE/Lua integration. |
-| `CEObjectWrapper` | Base lifecycle wrapper for CE object handles. |
-| `MemoryAccess` | Read/write bytes, integers, floats, doubles, pointers, and strings. |
-| `MemoryAllocator` | Allocate, free, and change memory protection. |
-| `MemoryRegions` | Enumerate regions and read protection flags. |
-| `Process` | Open and inspect target process state. |
-| `ModuleEnumerator` | Enumerate modules and memory regions. |
-| `AddressResolver` | Resolve Cheat Engine address expressions. |
-| `SymbolManager` | Symbol lookup, module size, pointer-size, and symbol refresh helpers. |
-| `SymbolHandler` | Direct symbol handler refresh wrapper. |
-| `SymbolWaiter` | Helpers for waiting on symbol readiness. |
-| `MemScan` | Wrapper around CE `createMemScan` / `firstScan` / `nextScan`. |
-| `FoundList` | Wrapper for scan result lists. |
-| `AOBScanner` | AOB scan helpers, bounded scan fallback logic, and signature helpers. |
-| `Disassembler` | `disassemble`, instruction size, previous opcode, and function range helpers. |
-| `AutoAssembler` | Auto Assemble validation and execution helpers. |
-| `AdvancedDebugger` | `debug_setBreakpoint` and debugger operations. |
-| `Debugger` | Higher-level debugger wrapper. |
-| `AddressList` | Cheat table memory records. |
-| `ThreadList` | Thread enumeration helpers. |
-| `Converter` | String/hash conversion helpers. |
-| `Speedhack` | CE speedhack state and control. |
+| Class              | Purpose                                                                       |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `LuaExecutor`      | Execute Lua and serialize return values.                                      |
+| `LuaLogger`        | Logging helpers for CE/Lua integration.                                       |
+| `CEObjectWrapper`  | Base lifecycle wrapper for CE object handles.                                 |
+| `MemoryAccess`     | Read/write bytes, integers, floats, doubles, pointers, and strings.           |
+| `MemoryAllocator`  | Allocate, free, and change memory protection.                                 |
+| `MemoryRegions`    | Enumerate regions and read protection flags.                                  |
+| `Process`          | Open and inspect target process state.                                        |
+| `ModuleEnumerator` | Enumerate modules and memory regions.                                         |
+| `AddressResolver`  | Resolve Cheat Engine address expressions.                                     |
+| `SymbolManager`    | Symbol lookup, module size, pointer-size, and symbol refresh helpers.         |
+| `SymbolHandler`    | Direct symbol handler refresh wrapper.                                        |
+| `SymbolWaiter`     | Helpers for waiting on symbol readiness.                                      |
+| `MemScan`          | Wrapper around CE `createMemScan` / `firstScan` / `nextScan`.                 |
+| `FoundList`        | Wrapper for scan result lists.                                                |
+| `AOBScanner`       | AOB scan helpers, bounded scan fallback logic, and signature helpers.         |
+| `Disassembler`     | `disassemble`, instruction size, previous opcode, and function range helpers. |
+| `AutoAssembler`    | Auto Assemble validation and execution helpers.                               |
+| `AdvancedDebugger` | `debug_setBreakpoint` and debugger operations.                                |
+| `Debugger`         | Higher-level debugger wrapper.                                                |
+| `AddressList`      | Cheat table memory records.                                                   |
+| `ThreadList`       | Thread enumeration helpers.                                                   |
+| `Converter`        | String/hash conversion helpers.                                               |
+| `Speedhack`        | CE speedhack state and control.                                               |
 
 ## Design principles
 
@@ -153,7 +152,6 @@ Expected failure cases include:
 
 ## Development notes
 
-- Keep wrappers thin and aligned with `celua.txt`.
 - Prefer adding a capability check over assuming a CE function exists.
 - Preserve Lua stack balance after every direct Lua call.
 - Keep scan operations bounded when a caller supplied bounds.
