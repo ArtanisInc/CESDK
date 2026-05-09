@@ -38,6 +38,7 @@ namespace CESDK.Classes
         /// </summary>
         private void CreateFoundListFromMemScan(MemScan memScan)
         {
+            var initialTop = lua.GetTop();
             try
             {
                 lua.GetGlobal("createFoundList");
@@ -54,7 +55,7 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 
@@ -86,6 +87,7 @@ namespace CESDK.Classes
 
         public void Initialize()
         {
+            var initialTop = lua.GetTop();
             try
             {
                 lua.PushCEObject(CEObject);
@@ -102,7 +104,7 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 
@@ -123,6 +125,7 @@ namespace CESDK.Classes
 
         int GetCount()
         {
+            var initialTop = lua.GetTop();
             try
             {
                 lua.PushCEObject(CEObject);
@@ -144,12 +147,13 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 
         public string GetAddress(int i)
         {
+            var initialTop = lua.GetTop();
             try
             {
                 lua.PushCEObject(CEObject);
@@ -166,12 +170,13 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 
         public string GetValue(int i)
         {
+            var initialTop = lua.GetTop();
             try
             {
                 lua.PushCEObject(CEObject);
@@ -188,7 +193,7 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 

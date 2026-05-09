@@ -38,6 +38,7 @@ namespace CESDK.Classes
         public MemScan()
         {
             IsMainScanner = false;
+            var initialTop = lua.GetTop();
             try
             {
                 lua.GetGlobal("createMemScan");
@@ -55,7 +56,7 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 
@@ -66,6 +67,7 @@ namespace CESDK.Classes
         public static MemScan GetCurrentMemScan()
         {
             var lua = PluginContext.Lua;
+            var initialTop = lua.GetTop();
             try
             {
                 lua.GetGlobal("getCurrentMemscan");
@@ -86,7 +88,7 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 
@@ -118,6 +120,7 @@ namespace CESDK.Classes
         /// </summary>
         public void DeinitializeFoundList()
         {
+            var initialTop = lua.GetTop();
             try
             {
                 PushCEObject();  // Stack: [memscan]
@@ -147,7 +150,7 @@ namespace CESDK.Classes
             }
             catch (Exception ex)
             {
-                lua.SetTop(0); // Clean up stack on error
+                lua.SetTop(initialTop); // Clean up stack on error
                 throw new MemScanException($"Failed to deinitialize foundlist: {ex.Message}", ex);
             }
         }
@@ -307,6 +310,7 @@ namespace CESDK.Classes
         /// <param name="parameters">Scan parameters</param>
         public void FirstScan(ScanParameters parameters)
         {
+            var initialTop = lua.GetTop();
             try
             {
                 lua.PushCEObject(CEObject);
@@ -336,7 +340,7 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 
@@ -346,6 +350,7 @@ namespace CESDK.Classes
         /// <param name="parameters">Scan parameters</param>
         public void NextScan(ScanParameters parameters)
         {
+            var initialTop = lua.GetTop();
             try
             {
                 lua.PushCEObject(CEObject);
@@ -370,7 +375,7 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 
@@ -379,6 +384,7 @@ namespace CESDK.Classes
         /// </summary>
         public void WaitTillDone()
         {
+            var initialTop = lua.GetTop();
             try
             {
                 lua.PushCEObject(CEObject);
@@ -393,7 +399,7 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 

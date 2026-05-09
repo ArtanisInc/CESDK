@@ -412,6 +412,7 @@ namespace CESDK.Classes
     {
         public AddressList()
         {
+            var initialTop = lua.GetTop();
             try
             {
                 lua.GetGlobal("getAddressList");
@@ -431,7 +432,7 @@ namespace CESDK.Classes
             }
             finally
             {
-                lua.SetTop(0);
+                lua.SetTop(initialTop);
             }
         }
 
