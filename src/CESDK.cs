@@ -284,17 +284,14 @@ namespace CESDK
 
                 if (PluginNamePtr == IntPtr.Zero)
                 {
-                    foreach (var type in typeof(CheatEnginePlugin).Assembly.GetTypes())
-                    {
-                        if (type.IsSubclassOf(typeof(CheatEnginePlugin)) && !type.IsAbstract)
-                        {
-                            _currentPlugin = (CheatEnginePlugin)Activator.CreateInstance(type)!;
-                            break;
-                        }
-                    }
+                    // Scan assemblies to find the plugin
+                    _currentPlugin = FindPlugin();
 
                     if (_currentPlugin == null)
+                    {
+                        PluginLogger.Log("No CheatEnginePlugin subclass found.");
                         return 0;
+                    }
 
                     PluginNamePtr = Marshal.StringToHGlobalAnsi(_currentPlugin.Name);
                 }
@@ -324,13 +321,73 @@ namespace CESDK
                 }
                 catch (Exception)
                 {
-                    // Logger failed, will use console fallback below
+                    // Logger failed
                 }
 
                 Console.WriteLine("CEPluginInitialize Exception:");
                 Console.WriteLine(ex.ToString());
                 return 0;
             }
+        }
+
+        private static CheatEnginePlugin? FindPlugin()
+        {
+            try
+            {
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    var name = assembly.FullName;
+                    if (name == null || name.StartsWith("System.") || name.StartsWith("Microsoft.") || name.StartsWith("mscorlib"))
+                        continue;
+
+                    Type[] types;
+                    try
+                    {
+                        types = assembly.GetTypes();
+                    }
+                    catch (System.Reflection.ReflectionTypeLoadException rtle)
+                    {
+                        var validTypes = new System.Collections.Generic.List<Type>();
+                        if (rtle.Types != null)
+                        {
+                            foreach (var t in rtle.Types)
+                            {
+                                if (t != null) validTypes.Add(t);
+                            }
+                        }
+                        types = validTypes.ToArray();
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    foreach (var type in types)
+                    {
+                        if (typeof(CheatEnginePlugin).IsAssignableFrom(type) && !type.IsAbstract && type != typeof(CheatEnginePlugin))
+                        {
+                            try
+                            {
+                                return (CheatEnginePlugin)Activator.CreateInstance(type)!;
+                            }
+                            catch (Exception ex)
+                            {
+                                PluginLogger.Log($"Failed to create instance of {type.FullName}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLogger.Log($"Error during plugin discovery: {ex.Message}");
+            }
+            return null;
+        }
+
+        public static int InitializeSDK(IntPtr args, int size)
+        {
+            return CEPluginInitialize(args, size);
         }
     }
 }
